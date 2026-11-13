@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Temperature Monitoring Kit — ESP32 Dual-Storage Telemetry & Analytics Dashboard (ThingSpeak Channel 3568714)" />
+  <title>Temperature Monitoring Kit · ESP32 IoT</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('ptmk-theme');
+        document.documentElement.classList.toggle('dark', saved ? saved === 'dark' : true);
+      } catch (e) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
+
+  <style>
+    :root { color-scheme: light; }
+    html.dark { color-scheme: dark; }
+
+    * { -webkit-tap-highlight-color: transparent; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      background:
+        radial-gradient(1100px 520px at 10% -10%, rgba(16, 185, 129, .10), transparent 60%),
+        radial-gradient(900px 480px at 92% -4%, rgba(56, 189, 248, .10), transparent 55%),
+        #f4f7fb;
+      color: #0f172a;
+    }
+    html.dark body {
+      background:
+        radial-gradient(1100px 520px at 10% -10%, rgba(16, 185, 129, .13), transparent 60%),
+        radial-gradient(900px 480px at 95% -6%, rgba(59, 130, 246, .16), transparent 55%),
+        #060a13;
+      color: #e2e8f0;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(15, 23, 42, .035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 23, 42, .035) 1px, transparent 1px);
+      background-size: 42px 42px;
+      -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 78%);
+      mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 78%);
+    }
+    html.dark body::before {
+      background-image:
+        linear-gradient(rgba(148, 163, 184, .05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, .05) 1px, transparent 1px);
+    }
+
+    .card {
+      position: relative;
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, .28);
+      background: rgba(255, 255, 255, .85);
+      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 40px -30px rgba(15, 23, 42, .35), inset 0 1px 0 rgba(255, 255, 255, .75);
+      transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease;
+    }
+    html.dark .card {
+      background: rgba(10, 16, 28, .72);
+      border-color: rgba(51, 65, 85, .55);
+      box-shadow: 0 24px 50px -32px rgba(0, 0, 0, .85), inset 0 1px 0 rgba(148, 163, 184, .06);
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      border-color: rgba(16, 185, 129, .45);
+      box-shadow: 0 26px 50px -30px rgba(16, 185, 129, .28);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      border-radius: .7rem;
+      border: 1px solid transparent;
+      padding: .55rem .85rem;
+      font-size: .75rem;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background-color .2s ease, border-color .2s ease, filter .2s ease, transform .15s ease;
+    }
+    .btn:active { transform: translateY(1px) scale(.99); }
+    .btn-secondary {
+      background: rgba(148, 163, 184, .12);
+      border-color: rgba(148, 163, 184, .3);
+      color: #334155;
+    }
+    .btn-secondary:hover { background: rgba(148, 163, 184, .22); }
+    html.dark .btn-secondary {
+      background: rgba(148, 163, 184, .08);
+      border-color: rgba(148, 163, 184, .2);
+      color: #cbd5e1;
+    }
+    html.dark .btn-secondary:hover { background: rgba(148, 163, 184, .16); }
+    .btn-primary {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #ffffff;
+      box-shadow: 0 10px 24px -12px rgba(16, 185, 129, .65);
+    }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-icon { width: 2.35rem; height: 2.35rem; padding: 0; flex: 0 0 auto; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      border-radius: 9999px;
+      border: 1px solid transparent;
+      padding: .35rem .7rem;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      transition: color .25s ease, background-color .25s ease, border-color .25s ease;
+    }
+    .status-pill.online { color: #047857; background: rgba(16, 185, 129, .10); border-color: rgba(16, 185, 129, .30); }
+    html.dark .status-pill.online { color: #34d399; }
+    .status-pill.offline { color: #be123c; background: rgba(244, 63, 94, .10); border-color: rgba(244, 63, 94, .30); }
+    html.dark .status-pill.offline { color: #fb7185; }
+    .status-pill.pending { color: #b45309; background: rgba(245, 158, 11, .10); border-color: rgba(245, 158, 11, .30); }
+    html.dark .status-pill.pending { color: #fbbf24; }
+
+    .pill-dot { position: relative; width: 7px; height: 7px; border-radius: 9999px; flex: 0 0 auto; }
+    .pill-dot.online { background: #10b981; }
+    .pill-dot.online::after { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: #10b981; animation: ping 1.8s ease-out infinite; }
+    .pill-dot.offline { background: #f43f5e; }
+    .pill-dot.pending { background: #f59e0b; }
+    @keyframes ping {
+      0% { transform: scale(1); opacity: .55; }
+      80%, 100% { transform: scale(2.4); opacity: 0; }
+    }
+
+    .trend-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      border-radius: 9999px;
+      padding: .3rem .65rem;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .trend-pill.up { color: #ef4444; background: rgba(239, 68, 68, .12); }
+    html.dark .trend-pill.up { color: #fb7185; }
+    .trend-pill.down { color: #2563eb; background: rgba(59, 130, 246, .12); }
+    html.dark .trend-pill.down { color: #60a5fa; }
+    .trend-pill.stable { color: #64748b; background: rgba(100, 116, 139, .12); }
+    html.dark .trend-pill.stable { color: #94a3b8; }
+
+    .cat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .38rem;
+      border-radius: 9999px;
+      border: 1px solid transparent;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+    .cat-badge.md { padding: .28rem .6rem; font-size: 10px; }
+    .cat-badge.lg { padding: .45rem .8rem; font-size: 12px; }
+    .cat-dot { width: 5px; height: 5px; border-radius: 9999px; flex: 0 0 auto; }
+
+    .tx-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      border-radius: 9999px;
+      border: 1px solid transparent;
+      padding: .28rem .6rem;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      white-space: nowrap;
+    }
+    .tx-badge.online { color: #059669; background: rgba(16, 185, 129, .10); border-color: rgba(16, 185, 129, .28); }
+    html.dark .tx-badge.online { color: #34d399; }
+    .tx-badge.cloud { color: #0284c7; background: rgba(14, 165, 233, .10); border-color: rgba(14, 165, 233, .28); }
+    html.dark .tx-badge.cloud { color: #38bdf8; }
+    .tx-dot { position: relative; width: 5px; height: 5px; border-radius: 9999px; background: currentColor; }
+    .tx-dot::after { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: currentColor; animation: ping 1.8s ease-out infinite; }
+
+    .pg-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 2rem;
+      height: 2rem;
+      padding: 0 .5rem;
+      border-radius: .55rem;
+      border: 1px solid rgba(148, 163, 184, .3);
+      background: transparent;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+    }
+    .pg-btn:hover:not(:disabled) { background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .4); color: #059669; }
+    html.dark .pg-btn { color: #cbd5e1; border-color: rgba(71, 85, 105, .5); }
+    html.dark .pg-btn:hover:not(:disabled) { color: #34d399; background: rgba(16, 185, 129, .12); }
+    .pg-btn:disabled { opacity: .35; cursor: not-allowed; }
+    .pg-btn.pg-active {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-color: transparent;
+      color: #ffffff;
+      box-shadow: 0 8px 18px -10px rgba(16, 185, 129, .8);
+    }
+
+    .toast {
+      pointer-events: auto;
+      display: flex;
+      align-items: flex-start;
+      gap: .6rem;
+      width: min(20rem, calc(100vw - 2.5rem));
+      border-radius: .85rem;
+      border: 1px solid transparent;
+      padding: .7rem .85rem;
+      background: rgba(255, 255, 255, .97);
+      box-shadow: 0 24px 48px -24px rgba(15, 23, 42, .45);
+      opacity: 0;
+      transform: translateY(10px) scale(.98);
+      transition: opacity .28s ease, transform .28s ease;
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+    }
+    .toast.show { opacity: 1; transform: none; }
+    html.dark .toast { background: rgba(13, 20, 34, .97); }
+    .toast p { color: #334155; }
+    html.dark .toast p { color: #e2e8f0; }
+    .toast-success { border-color: rgba(16, 185, 129, .45); }
+    .toast-success > i { color: #10b981; }
+    .toast-error { border-color: rgba(244, 63, 94, .45); }
+    .toast-error > i { color: #f43f5e; }
+    .toast-info { border-color: rgba(56, 189, 248, .45); }
+    .toast-info > i { color: #0ea5e9; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, .35); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, .55); }
+
+    ::selection { background: rgba(16, 185, 129, .3); }
+
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid rgba(16, 185, 129, .6);
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen antialiased">
+
+  <!-- ================= HEADER ================= -->
+  <header class="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-slate-800/80 dark:bg-[#060a13]/85">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-6 lg:px-8">
+      <div class="flex min-w-0 items-center gap-3">
+        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 via-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25">
+          <i class="fa-solid fa-temperature-half text-lg" aria-hidden="true"></i>
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-[12px] font-extrabold uppercase leading-tight tracking-[0.13em] text-slate-900 dark:text-white sm:truncate sm:text-[15px] sm:tracking-[0.14em]">
+            Temperature Monitoring Kit
+          </h1>
+          <p class="mt-0.5 text-[10.5px] font-medium text-slate-500 dark:text-slate-400">
+            ESP32 Dual-Storage Telemetry &amp; Analytics
+          </p>
+        </div>
+      </div>
+
+      <div class="ml-auto flex flex-wrap items-center gap-2">
+        <div id="livePill" class="status-pill pending" title="Polling otomatis setiap 10 detik">
+          <span id="liveDot" class="pill-dot pending"></span>
+          <span id="liveText">Polling…</span>
+        </div>
+
+        <div id="connPill" class="status-pill pending">
+          <span id="connDot" class="pill-dot pending"></span>
+          <span id="connText">Menghubungkan…</span>
+        </div>
+
+        <div class="flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-100/60 px-3 py-1.5 text-[10.5px] font-semibold text-slate-500 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400">
+          <i class="fa-regular fa-clock text-[10px]" aria-hidden="true"></i>
+          <span>Last Updated: <span id="lastUpdated" class="font-mono text-slate-700 dark:text-slate-200">—</span></span>
+        </div>
+
+        <button id="refreshBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Ambil data terbaru" title="Refresh data sekarang">
+          <i id="refreshIcon" class="fa-solid fa-rotate text-xs" aria-hidden="true"></i>
+        </button>
+        <button id="themeToggle" class="btn btn-secondary btn-icon" type="button" aria-label="Ganti tema" title="Dark / Light theme">
+          <i id="themeIcon" class="fa-solid fa-sun text-xs" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN ================= -->
+  <main class="relative z-10 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+
+    <!-- Error / fallback banner -->
+    <section id="errorBanner" class="card mb-5 hidden border-rose-300/70 !bg-rose-50/90 p-4 dark:border-rose-500/30 dark:!bg-rose-950/30" role="alert" aria-live="assertive">
+      <div class="flex flex-wrap items-start gap-3">
+        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-500/15 text-rose-500">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p id="errorTitle" class="text-xs font-bold text-rose-600 dark:text-rose-400">Koneksi ke ThingSpeak terputus</p>
+          <p id="errorDetail" class="mt-0.5 text-[11px] leading-relaxed text-rose-500/90 dark:text-rose-300/80">—</p>
+        </div>
+        <button id="retryBtn" class="btn btn-secondary" type="button">
+          <i class="fa-solid fa-arrows-rotate text-[10px]" aria-hidden="true"></i> Retry
+        </button>
+      </div>
+    </section>
+
+    <!-- ================= METRIC CARDS ================= -->
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ringkasan metrik realtime">
+
+      <!-- 1. Suhu realtime -->
+      <article class="card card-hover p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Suhu Realtime Terbaru</p>
+            <div class="mt-3 flex items-end gap-1.5">
+              <span id="metricTemp" class="font-mono text-[2.55rem] font-bold leading-none tracking-tight text-slate-900 dark:text-white">—</span>
+              <span class="pb-1 text-sm font-semibold text-slate-400">°C</span>
+            </div>
+            <div id="metricTrend" class="trend-pill stable mt-3">
+              <i class="fa-solid fa-minus" aria-hidden="true"></i><span>Menunggu data</span>
+            </div>
+          </div>
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 ring-1 ring-inset ring-emerald-500/20">
+            <i class="fa-solid fa-temperature-half" aria-hidden="true"></i>
+          </div>
+        </div>
+      </article>
+
+      <!-- 2. Status klasifikasi -->
+      <article class="card card-hover p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Status Klasifikasi</p>
+            <div id="metricStatus" class="mt-3.5">
+              <span class="cat-badge md" style="color:#64748b;background:rgba(100,116,139,.10);border-color:rgba(100,116,139,.30)">Menunggu Data</span>
+            </div>
+            <p id="metricStatusNote" class="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">—</p>
+          </div>
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-500 ring-1 ring-inset ring-sky-500/20">
+            <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+          </div>
+        </div>
+      </article>
+
+      <!-- 3. Total sampel -->
+      <article class="card card-hover p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total Sampel Data</p>
+            <div class="mt-3 flex items-end gap-1.5">
+              <span id="metricTotal" class="font-mono text-[2.55rem] font-bold leading-none tracking-tight text-slate-900 dark:text-white">0</span>
+              <span class="pb-1 text-sm font-semibold text-slate-400">log</span>
+            </div>
+            <p id="metricTotalSub" class="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">Belum ada data masuk</p>
+          </div>
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 ring-1 ring-inset ring-amber-500/20">
+            <i class="fa-solid fa-database" aria-hidden="true"></i>
+          </div>
+        </div>
+      </article>
+
+      <!-- 4. Rata-rata -->
+      <article class="card card-hover p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Rata-Rata Suhu</p>
+            <div class="mt-3 flex items-end gap-1.5">
+              <span id="metricAvg" class="font-mono text-[2.55rem] font-bold leading-none tracking-tight text-slate-900 dark:text-white">—</span>
+              <span class="pb-1 text-sm font-semibold text-slate-400">°C</span>
+            </div>
+            <p id="metricAvgSub" class="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">Rata-rata 50 sampel terakhir</p>
+          </div>
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-500 ring-1 ring-inset ring-violet-500/20">
+            <i class="fa-solid fa-chart-simple" aria-hidden="true"></i>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- ================= CHART ================= -->
+    <section class="card mt-5 p-5 sm:p-6" aria-label="Grafik tren suhu">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="flex items-center gap-2 text-sm font-bold tracking-tight text-slate-900 dark:text-white">
+            <i class="fa-solid fa-chart-line text-emerald-500" aria-hidden="true"></i>
+            Tren Suhu Realtime
+          </h2>
+          <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            50 sampel terakhir · polling otomatis setiap 10 detik · zona waktu WIB (UTC+7)
+          </p>
+        </div>
+        <button id="exportChartBtn" class="btn btn-secondary" type="button">
+          <i class="fa-regular fa-image" aria-hidden="true"></i> Export Chart as Image (.png)
+        </button>
+      </div>
+
+      <div class="relative mt-5 h-[300px] sm:h-[360px]">
+        <canvas id="tempChart" aria-label="Grafik garis tren suhu" role="img"></canvas>
+        <div id="chartEmpty" class="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-50/70 text-center dark:bg-slate-900/50">
+          <i class="fa-solid fa-satellite-dish text-2xl text-slate-300 dark:text-slate-600" aria-hidden="true"></i>
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Menunggu data telemetri…</p>
+          <p class="max-w-xs text-[11px] text-slate-400 dark:text-slate-500">Grafik akan muncul setelah perangkat ESP32 mengirim data ke ThingSpeak.</p>
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <span class="inline-flex items-center gap-2"><span class="h-[2px] w-5 rounded-full bg-[#3B82F6]"></span>19.0 °C · Batas Dingin</span>
+        <span class="inline-flex items-center gap-2"><span class="h-[2px] w-5 rounded-full bg-[#06B6D4]"></span>24.0 °C · Batas Normal</span>
+        <span class="inline-flex items-center gap-2"><span class="h-[2px] w-5 rounded-full bg-[#EF4444]"></span>35.0 °C · Ambang Panas</span>
+        <span class="ml-auto hidden items-center gap-2 normal-case tracking-normal text-slate-400 dark:text-slate-500 sm:inline-flex">
+          <i class="fa-solid fa-wave-square" aria-hidden="true"></i> Smooth curve · tension 0.4
+        </span>
+      </div>
+    </section>
+
+    <!-- ================= TABLE ================= -->
+    <section class="card mt-5 overflow-hidden" aria-label="Histori dan log data">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800/80 sm:px-6 sm:py-5">
+        <div>
+          <h2 class="flex items-center gap-2 text-sm font-bold tracking-tight text-slate-900 dark:text-white">
+            <i class="fa-solid fa-table-list text-cyan-500" aria-hidden="true"></i>
+            Histori &amp; Log Data
+          </h2>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="exportCsvBtn" class="btn btn-secondary" type="button">
+            <i class="fa-solid fa-file-csv text-emerald-500" aria-hidden="true"></i> Export to CSV
+          </button>
+          <button id="exportXlsxBtn" class="btn btn-primary" type="button">
+            <i class="fa-solid fa-file-excel" aria-hidden="true"></i> Export to Excel (.xlsx)
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-3 px-5 py-4 dark:border-slate-800/80 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <label class="relative block w-full sm:max-w-xs">
+          <span class="sr-only">Cari data</span>
+          <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400" aria-hidden="true"></i>
+          <input id="searchInput" type="search" autocomplete="off" placeholder="Cari suhu atau waktu…"
+            class="w-full rounded-xl border border-slate-200 bg-white/80 py-2 pl-9 pr-3 text-xs font-medium text-slate-700 placeholder:text-slate-400 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:placeholder:text-slate-500" />
+        </label>
+
+        <div class="flex items-center gap-2">
+          <label for="filterSelect" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Filter</label>
+          <div class="relative">
+            <select id="filterSelect"
+              class="appearance-none rounded-xl border border-slate-200 bg-white/80 py-2 pl-3 pr-9 text-xs font-semibold text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+              <option value="all">Semua Data</option>
+              <option value="1">Sangat Dingin</option>
+              <option value="2">Dingin</option>
+              <option value="3">Normal</option>
+              <option value="4">Panas</option>
+            </select>
+            <i class="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-slate-400" aria-hidden="true"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 border-y border-slate-200/80 bg-slate-50/60 px-5 py-2 text-[10px] font-medium text-slate-400 dark:border-slate-800/80 dark:bg-slate-900/40 dark:text-slate-500 sm:hidden">
+        <i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i>
+        Geser tabel ke samping untuk melihat kolom lainnya
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+          <thead class="border-y border-slate-200/80 bg-slate-50/80 dark:border-slate-800/80 dark:bg-slate-900/50">
+            <tr>
+              <th scope="col" class="whitespace-nowrap px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">No. Sampel (#)</th>
+              <th scope="col" class="whitespace-nowrap px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Waktu (WIB)</th>
+              <th scope="col" class="whitespace-nowrap px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Suhu (°C)</th>
+              <th scope="col" class="whitespace-nowrap px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Kategori Suhu</th>
+              <th scope="col" class="whitespace-nowrap px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Status Transmisi</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-100 dark:divide-slate-800/70"></tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-col gap-3 border-t border-slate-200/80 px-5 py-4 dark:border-slate-800/80 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <p id="tableInfo" class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Memuat data…</p>
+        <div id="pagination" class="flex flex-wrap items-center gap-1.5"></div>
+      </div>
+    </section>
+
+    <noscript>
+      <div class="card mt-5 border-amber-400/60 !bg-amber-50/90 p-4 text-xs font-semibold text-amber-700 dark:!bg-amber-950/30 dark:text-amber-300">
+        JavaScript nonaktif. Aktifkan JavaScript untuk menjalankan dashboard monitoring ini.
+      </div>
+    </noscript>
+  </main>
+
+  <footer class="relative z-10 mt-2 border-t border-slate-200/80 dark:border-slate-800/80">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-[10.5px] font-medium text-slate-500 dark:text-slate-400 sm:px-6 lg:px-8">
+      <p class="ml-auto">© <span id="year">2026</span>Temperature Monitoring</p>
+    </div>
+  </footer>
+
+  <!-- ================= TOASTS ================= -->
+  <div id="toastContainer" class="pointer-events-none fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- ================= LIBRARIES ================= -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+  
+  <script>
+    (() => {
+      'use strict';
+
+      /* ============================================================
+         CONFIG & CONSTANTS
+      ============================================================ */
+      const CONFIG = {
+        channelId: '3568714',
+        endpoint: 'https://api.thingspeak.com/channels/3568714/feeds.json?results=50',
+        pollMs: 10000,
+        perPage: 10,
+        fetchTimeoutMs: 9000,
+        staleMs: 10 * 60 * 1000
+      };
+
+      const CLASSES = {
+        1: { code: 1, label: 'Sangat Dingin', color: '#3B82F6', note: 'Risiko Kondensasi / Korosi', range: '< 19.0 °C' },
+        2: { code: 2, label: 'Dingin', color: '#06B6D4', note: 'Suhu Ideal Ruang Operasi JIKMA', range: '19.0 – 24.0 °C' },
+        3: { code: 3, label: 'Normal', color: '#10B981', note: 'Rentang Galat Rendah JAIC', range: '24.1 – 35.0 °C' },
+        4: { code: 4, label: 'Panas', color: '#EF4444', note: 'Ambang Aktivasi Exhaust JAIC', range: '> 35.0 °C' }
+      };
+
+      const EXPORT_HEADER = ['No. Sampel', 'Waktu (WIB)', 'Suhu (°C)', 'Kode Klasifikasi', 'Kategori', 'Catatan', 'Marker', 'Status Transmisi'];
+
+      const state = {
+        feeds: [],
+        online: null,            // null = connecting, true = online, false = offline
+        error: null,
+        hasFetched: false,
+        loading: false,
+        page: 1,
+        filter: 'all',
+        search: '',
+        lastUpdate: null,
+        chart: null
+      };
+
+      const els = {};
+
+      const WIB_FMT = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jakarta',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23'
+      });
+
+      /* ============================================================
+         UTILITIES
+      ============================================================ */
+      const $ = (id) => document.getElementById(id);
+
+      function hexA(hex, alpha) {
+        if (typeof hex !== 'string' || hex.charAt(0) !== '#') return hex;
+        let h = hex.slice(1);
+        if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+        const n = parseInt(h, 16);
+        if (!Number.isFinite(n)) return hex;
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+      }
+
+      function tzParts(date) {
+        const parts = WIB_FMT.formatToParts(date);
+        const out = {};
+        parts.forEach((p) => { out[p.type] = p.value; });
+        return out;
+      }
+
+      function formatWIB(iso) {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return '—';
+        const p = tzParts(d);
+        return `${p.day}-${p.month}-${p.year} ${p.hour}:${p.minute}:${p.second}`;
+      }
+
+      function timeWIB(input) {
+        const d = input instanceof Date ? input : new Date(input);
+        if (Number.isNaN(d.getTime())) return '—';
+        const p = tzParts(d);
+        return `${p.hour}:${p.minute}:${p.second}`;
+      }
+
+      function wibStamp(date = new Date()) {
+        const p = tzParts(date);
+        return `${p.year}${p.month}${p.day}-${p.hour}${p.minute}${p.second}`;
+      }
+
+      function getThemeColors() {
+        const dark = document.documentElement.classList.contains('dark');
+        return dark
+          ? {
+              bg: '#0b1220',
+              text: '#94a3b8',
+              grid: 'rgba(148, 163, 184, 0.10)',
+              tooltipBg: 'rgba(15, 23, 42, 0.96)',
+              tooltipText: '#e2e8f0',
+              tooltipBorder: 'rgba(148, 163, 184, 0.25)'
+            }
+          : {
+              bg: '#ffffff',
+              text: '#64748b',
+              grid: 'rgba(100, 116, 139, 0.14)',
+              tooltipBg: 'rgba(255, 255, 255, 0.98)',
+              tooltipText: '#0f172a',
+              tooltipBorder: 'rgba(15, 23, 42, 0.10)'
+            };
+      }
+
+      /* ============================================================
+         DATA PARSING
+      ============================================================ */
+      function resolveCode(field2, temp) {
+        const code = parseInt(field2, 10);
+        if (code >= 1 && code <= 4) return code;
+        if (temp < 19) return 1;
+        if (temp <= 24) return 2;
+        if (temp <= 35) return 3;
+        return 4;
+      }
+
+      function parseFeeds(rawFeeds) {
+        const out = [];
+        (Array.isArray(rawFeeds) ? rawFeeds : []).forEach((f) => {
+          if (!f) return;
+          const temp = parseFloat(f.field1);
+          if (!Number.isFinite(temp)) return;
+          const code = resolveCode(f.field2, temp);
+          const cls = CLASSES[code];
+          const marker = String(f.field3 == null ? '' : f.field3).trim() === '1' ? 'YES' : 'NO';
+          out.push({
+            entryId: Number(f.entry_id),
+            createdAt: f.created_at,
+            temp,
+            code,
+            cls,
+            marker,
+            timeWIB: formatWIB(f.created_at),
+            timeShort: timeWIB(f.created_at)
+          });
+        });
+        out.sort((a, b) => a.entryId - b.entryId);
+        return out;
+      }
+
+      /* ============================================================
+         CHART PLUGINS
+      ============================================================ */
+      const backgroundPlugin = {
+        id: 'chartBackground',
+        beforeDraw(chart) {
+          const { ctx, width, height } = chart;
+          ctx.save();
+          ctx.fillStyle = getThemeColors().bg;
+          ctx.fillRect(0, 0, width, height);
+          ctx.restore();
+        }
+      };
+
+      function roundRectPath(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(x, y, w, h, r);
+        } else {
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath();
+        }
+      }
+
+      const thresholdPlugin = {
+        id: 'thresholdLines',
+        afterDatasetsDraw(chart) {
+          const opts = chart.options.plugins && chart.options.plugins.thresholdLines;
+          if (!opts || opts.enabled === false) return;
+          const { ctx, chartArea, scales } = chart;
+          if (!chartArea || !scales || !scales.y) return;
+          const theme = getThemeColors();
+
+          ctx.save();
+          (opts.lines || []).forEach((line) => {
+            const y = scales.y.getPixelForValue(line.value);
+            if (!Number.isFinite(y) || y < chartArea.top - 0.5 || y > chartArea.bottom + 0.5) return;
+
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = hexA(line.color, 0.55);
+            ctx.moveTo(chartArea.left, y);
+            ctx.lineTo(chartArea.right, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            const text = `${line.value.toFixed(1)}°C`;
+            ctx.font = '600 10px "JetBrains Mono", monospace';
+            const w = ctx.measureText(text).width + 10;
+            const h = 15;
+            const x = chartArea.right - w - 4;
+            let ty = y - h - 3;
+            if (ty < chartArea.top) ty = y + 3;
+
+            ctx.fillStyle = hexA(theme.bg, 0.9);
+            roundRectPath(ctx, x, ty, w, h, 4);
+            ctx.fill();
+            ctx.strokeStyle = hexA(line.color, 0.45);
+            ctx.stroke();
+
+            ctx.fillStyle = line.color;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, x + w - 5, ty + h / 2 + 0.5);
+          });
+          ctx.restore();
+        }
+      };
+
+      /* ============================================================
+         CHART
+      ============================================================ */
+      function chartOptions() {
+        const c = getThemeColors();
+        return {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 480, easing: 'easeOutQuart' },
+          interaction: { mode: 'index', intersect: false },
+          layout: { padding: { top: 8, right: 8, bottom: 0, left: 0 } },
+          plugins: {
+            legend: { display: false },
+            thresholdLines: {
+              lines: [
+                { value: 19, color: '#3B82F6' },
+                { value: 24, color: '#06B6D4' },
+                { value: 35, color: '#EF4444' }
+              ]
+            },
+            tooltip: {
+              backgroundColor: c.tooltipBg,
+              titleColor: c.tooltipText,
+              bodyColor: c.tooltipText,
+              borderColor: c.tooltipBorder,
+              borderWidth: 1,
+              padding: 12,
+              cornerRadius: 10,
+              displayColors: false,
+              titleFont: { family: 'Inter', size: 11, weight: '600' },
+              bodyFont: { family: 'JetBrains Mono', size: 12, weight: '600' },
+              callbacks: {
+                title(items) {
+                  if (!items || !items.length) return '';
+                  const full = state.chart && state.chart.$fullLabels ? state.chart.$fullLabels[items[0].dataIndex] : null;
+                  return full ? `WIB ${full}` : String(items[0].label || '');
+                },
+                label(item) {
+                  const rows = state.chart && state.chart.$rows ? state.chart.$rows : [];
+                  const row = rows[item.dataIndex];
+                  if (!row) return `${Number(item.parsed.y).toFixed(2)} °C`;
+                  return [`${row.temp.toFixed(2)} °C`, `Kategori: ${row.cls.label}`];
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: c.grid, drawTicks: false },
+              border: { display: false },
+              ticks: {
+                color: c.text,
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 5,
+                padding: 8,
+                font: { family: 'JetBrains Mono', size: 9 }
+              }
+            },
+            y: {
+              min: 17,
+              max: 37,
+              grid: { color: c.grid, drawTicks: false },
+              border: { display: false },
+              ticks: {
+                color: c.text,
+                padding: 8,
+                font: { family: 'JetBrains Mono', size: 10 },
+                callback(value) { return `${Number(value).toFixed(0)}°`; }
+              }
+            }
+          }
+        };
+      }
+
+      function createChart() {
+        const canvas = $('tempChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+        const colors = getThemeColors();
+
+        state.chart = new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [{
+              label: 'Suhu (°C)',
+              data: [],
+              borderWidth: 2.5,
+              tension: 0.4,
+              fill: true,
+              pointRadius: 2.5,
+              pointHoverRadius: 5,
+              pointBorderWidth: 2,
+              borderColor: '#10B981',
+              pointBackgroundColor: '#10B981',
+              pointBorderColor: colors.bg,
+              backgroundColor(context) {
+                const chart = context.chart;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return 'rgba(16, 185, 129, 0.10)';
+                const color = chart.data.datasets[0].borderColor || '#10B981';
+                const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                gradient.addColorStop(0, hexA(color, 0.30));
+                gradient.addColorStop(0.65, hexA(color, 0.08));
+                gradient.addColorStop(1, hexA(color, 0));
+                return gradient;
+              }
+            }]
+          },
+          options: chartOptions(),
+          plugins: [backgroundPlugin, thresholdPlugin]
+        });
+      }
+
+      function applyChartTheme() {
+        if (!state.chart) return;
+        const c = getThemeColors();
+        const o = state.chart.options;
+        o.scales.x.ticks.color = c.text;
+        o.scales.y.ticks.color = c.text;
+        o.scales.x.grid.color = c.grid;
+        o.scales.y.grid.color = c.grid;
+        o.plugins.tooltip.backgroundColor = c.tooltipBg;
+        o.plugins.tooltip.titleColor = c.tooltipText;
+        o.plugins.tooltip.bodyColor = c.tooltipText;
+        o.plugins.tooltip.borderColor = c.tooltipBorder;
+        state.chart.data.datasets[0].pointBorderColor = c.bg;
+        state.chart.update();
+      }
+
+      function renderChart() {
+        const chart = state.chart;
+        if (!chart || mqttLiveActive) return;
+
+        const feeds = state.feeds;
+        const latest = feeds.length ? feeds[feeds.length - 1] : null;
+        const color = latest ? latest.cls.color : '#10B981';
+        const ds = chart.data.datasets[0];
+
+        ds.borderColor = color;
+        ds.pointBackgroundColor = color;
+        ds.pointBorderColor = getThemeColors().bg;
+
+        chart.data.labels = feeds.map((f) => f.timeShort);
+        ds.data = feeds.map((f) => f.temp);
+        chart.$fullLabels = feeds.map((f) => f.timeWIB);
+        chart.$rows = feeds;
+
+        const temps = feeds.map((f) => f.temp);
+        const lo = temps.length ? Math.min(...temps, 18) : 17;
+        const hi = temps.length ? Math.max(...temps, 36) : 37;
+        const pad = Math.max(0.6, (hi - lo) * 0.06);
+        chart.options.scales.y.min = Math.floor((lo - pad) * 10) / 10;
+        chart.options.scales.y.max = Math.ceil((hi + pad) * 10) / 10;
+
+        els.chartEmpty.classList.toggle('hidden', temps.length > 0);
+        chart.update();
+      }
+
+      /* ============================================================
+         RENDER: STATUS & METRICS
+      ============================================================ */
+      function badgeHTML(cls, size = 'md') {
+        return `<span class="cat-badge ${size}" style="color:${cls.color};background:${hexA(cls.color, 0.12)};border-color:${hexA(cls.color, 0.35)}"><span class="cat-dot" style="background:${cls.color}"></span>${cls.label}</span>`;
+      }
+
+      function renderConnection() {
+        const mode = state.online === true ? 'online' : state.online === false ? 'offline' : 'pending';
+
+        els.connPill.className = `status-pill ${mode}`;
+        els.connDot.className = `pill-dot ${mode}`;
+        els.connText.textContent = mode === 'online' ? 'Online / Polling Active' : mode === 'offline' ? 'Offline / Error' : 'Menghubungkan…';
+
+        els.livePill.className = `status-pill ${mode}`;
+        els.liveDot.className = `pill-dot ${mode}`;
+        els.liveText.textContent = mode === 'online' ? 'Live Polling' : mode === 'offline' ? 'Polling Error' : 'Polling…';
+
+        const showError = mode === 'offline';
+        els.errorBanner.classList.toggle('hidden', !showError);
+        if (showError) {
+          els.errorTitle.textContent = 'Koneksi ke ThingSpeak terputus';
+          const base = state.error ? `Detail: ${state.error}` : 'Gagal memuat data dari server ThingSpeak.';
+          els.errorDetail.textContent = base + (state.feeds.length
+            ? ' — Dashboard menampilkan data terakhir yang berhasil dimuat.'
+            : ' — Belum ada data yang bisa ditampilkan.');
+        }
+      }
+
+      function renderMetrics() {
+        const feeds = state.feeds;
+        const latest = feeds.length ? feeds[feeds.length - 1] : null;
+        const prev = feeds.length > 1 ? feeds[feeds.length - 2] : null;
+
+        if (!latest) {
+          if (!mqttLiveActive) {
+            els.metricTemp.textContent = '—';
+            els.metricTrend.className = 'trend-pill stable mt-3';
+            els.metricTrend.innerHTML = '<i class="fa-solid fa-minus" aria-hidden="true"></i><span>Menunggu data</span>';
+
+            els.metricStatus.innerHTML = badgeHTML({ label: 'Menunggu Data', color: '#64748b' }, 'lg');
+            els.metricStatusNote.textContent = 'Menunggu pengiriman data suhu dari perangkat ESP32.';
+          }
+
+          els.metricTotal.textContent = '0';
+          els.metricTotalSub.textContent = 'Belum ada data masuk';
+
+          els.metricAvg.textContent = '—';
+          els.metricAvgSub.textContent = 'Rata-rata 50 sampel terakhir';
+          return;
+        }
+
+        if (!mqttLiveActive) {
+          els.metricTemp.textContent = latest.temp.toFixed(2);
+
+          const diff = prev ? latest.temp - prev.temp : 0;
+          let kind = 'stable';
+          let trendHTML = '';
+
+          if (!prev) {
+            trendHTML = '<i class="fa-solid fa-minus" aria-hidden="true"></i><span>Menunggu sampel pembanding</span>';
+          } else if (diff > 0.05) {
+            kind = 'up';
+            trendHTML = `<i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i><span>+${Math.abs(diff).toFixed(2)} °C</span><span class="opacity-70">naik</span>`;
+          } else if (diff < -0.05) {
+            kind = 'down';
+            trendHTML = `<i class="fa-solid fa-arrow-trend-down" aria-hidden="true"></i><span>${Math.abs(diff).toFixed(2)} °C</span><span class="opacity-70">turun</span>`;
+          } else {
+            trendHTML = '<i class="fa-solid fa-arrow-right" aria-hidden="true"></i><span>Stabil</span><span class="opacity-70">±0.05 °C</span>';
+          }
+
+          els.metricTrend.className = `trend-pill ${kind} mt-3`;
+          els.metricTrend.innerHTML = trendHTML;
+
+          els.metricStatus.innerHTML = badgeHTML(latest.cls, 'lg');
+          els.metricStatusNote.textContent = `Rentang ${latest.cls.range}`;
+        }
+
+        els.metricTotal.textContent = String(feeds.length);
+        els.metricTotalSub.textContent = `Entry terakhir #${latest.entryId} · ${latest.timeShort} WIB`;
+
+        const temps = feeds.map((f) => f.temp);
+        const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
+        const min = Math.min(...temps);
+        const max = Math.max(...temps);
+
+        els.metricAvg.textContent = avg.toFixed(2);
+        els.metricAvgSub.textContent = `Min ${min.toFixed(2)} °C · Max ${max.toFixed(2)} °C`;
+      }
+
+      /* ============================================================
+         RENDER: TABLE & PAGINATION
+      ============================================================ */
+      function getRows() {
+        let rows = state.feeds.slice().sort((a, b) => b.entryId - a.entryId);
+
+        if (state.filter !== 'all') {
+          rows = rows.filter((r) => String(r.code) === state.filter);
+        }
+
+        const q = state.search.trim().toLowerCase();
+        if (q) {
+          rows = rows.filter((r) => {
+            return (
+              r.temp.toFixed(2).includes(q) ||
+              r.timeWIB.toLowerCase().includes(q) ||
+              String(r.entryId).includes(q) ||
+              r.cls.label.toLowerCase().includes(q)
+            );
+          });
+        }
+
+        return rows;
+      }
+
+      function rowHTML(r, latestId) {
+        const isLatest = r.entryId === latestId;
+        const status = isLatest
+          ? '<span class="tx-badge online"><span class="tx-dot"></span>Online</span>'
+          : '<span class="tx-badge cloud"><i class="fa-solid fa-cloud-arrow-up text-[9px]" aria-hidden="true"></i>ThingSpeak</span>';
+
+        return `<tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+          <td class="whitespace-nowrap px-5 py-3.5"><span class="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">#${r.entryId}</span></td>
+          <td class="whitespace-nowrap px-5 py-3.5"><span class="font-mono text-[12.5px] font-medium text-slate-700 dark:text-slate-200">${r.timeWIB}</span> <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400">WIB</span></td>
+          <td class="whitespace-nowrap px-5 py-3.5"><span class="font-mono text-sm font-bold" style="color:${r.cls.color}">${r.temp.toFixed(2)}</span> <span class="text-[10px] text-slate-400">°C</span></td>
+          <td class="whitespace-nowrap px-5 py-3.5">${badgeHTML(r.cls, 'md')}</td>
+          <td class="whitespace-nowrap px-5 py-3.5">${status}</td>
+        </tr>`;
+      }
+
+      function emptyRowHTML(noMatch) {
+        let icon = 'fa-satellite-dish';
+        let title = 'Memuat data dari ThingSpeak…';
+        let desc = 'Polling pertama sedang berjalan.';
+
+        if (noMatch) {
+          icon = 'fa-filter-circle-xmark';
+          title = 'Tidak ada data yang cocok';
+          desc = 'Ubah kata kunci pencarian atau filter kategori suhu.';
+        } else if (!state.online && state.hasFetched) {
+          icon = 'fa-plug-circle-xmark';
+          title = 'Gagal memuat data';
+          desc = 'Periksa koneksi internet lalu klik tombol Retry.';
+        } else if (state.hasFetched) {
+          icon = 'fa-inbox';
+          title = 'Belum ada data dari ESP32';
+          desc = 'Pastikan perangkat aktif dan mengirim data ke channel 3568714.';
+        }
+
+        return `<tr>
+          <td colspan="5" class="px-6 py-14 text-center">
+            <div class="mx-auto flex max-w-sm flex-col items-center gap-2">
+              <i class="fa-solid ${icon} text-2xl text-slate-300 dark:text-slate-600" aria-hidden="true"></i>
+              <p class="text-xs font-semibold text-slate-600 dark:text-slate-300">${title}</p>
+              <p class="text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">${desc}</p>
+            </div>
+          </td>
+        </tr>`;
+      }
+
+      function pageList(current, total) {
+        if (total <= 7) {
+          return Array.from({ length: total }, (_, i) => i + 1);
+        }
+        const set = new Set([1, total, current, current - 1, current + 1]);
+        const arr = Array.from(set).filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+        const out = [];
+        let prev = 0;
+        arr.forEach((p) => {
+          if (p - prev > 1) out.push('…');
+          out.push(p);
+          prev = p;
+        });
+        return out;
+      }
+
+      function renderPagination(totalPages) {
+        if (totalPages <= 0) {
+          els.pagination.innerHTML = '';
+          return;
+        }
+
+        const prevDisabled = state.page <= 1;
+        const nextDisabled = state.page >= totalPages;
+
+        const parts = [
+          `<button class="pg-btn" type="button" data-page="${state.page - 1}" ${prevDisabled ? 'disabled' : ''} aria-label="Halaman sebelumnya">
+            <i class="fa-solid fa-chevron-left text-[9px]" aria-hidden="true"></i>
+          </button>`
+        ];
+
+        pageList(state.page, totalPages).forEach((p) => {
+          if (p === '…') {
+            parts.push('<span class="px-1 text-xs text-slate-400 dark:text-slate-500">…</span>');
+          } else {
+            parts.push(`<button class="pg-btn ${p === state.page ? 'pg-active' : ''}" type="button" data-page="${p}" aria-label="Halaman ${p}" ${p === state.page ? 'aria-current="page"' : ''}>${p}</button>`);
+          }
+        });
+
+        parts.push(
+          `<button class="pg-btn" type="button" data-page="${state.page + 1}" ${nextDisabled ? 'disabled' : ''} aria-label="Halaman berikutnya">
+            <i class="fa-solid fa-chevron-right text-[9px]" aria-hidden="true"></i>
+          </button>`
+        );
+
+        els.pagination.innerHTML = parts.join('');
+      }
+
+      function renderTable() {
+        const rows = getRows();
+        const totalPages = rows.length ? Math.ceil(rows.length / CONFIG.perPage) : 0;
+
+        if (totalPages > 0 && state.page > totalPages) state.page = totalPages;
+        if (state.page < 1) state.page = 1;
+
+        const start = (state.page - 1) * CONFIG.perPage;
+        const pageRows = rows.slice(start, start + CONFIG.perPage);
+        const latestId = state.feeds.length ? state.feeds[state.feeds.length - 1].entryId : null;
+
+        if (pageRows.length) {
+          els.tableBody.innerHTML = pageRows.map((r) => rowHTML(r, latestId)).join('');
+        } else {
+          const noMatch = state.feeds.length > 0;
+          els.tableBody.innerHTML = emptyRowHTML(noMatch);
+        }
+
+        if (!state.hasFetched) {
+          els.tableInfo.textContent = 'Memuat data dari ThingSpeak…';
+        } else if (!rows.length) {
+          els.tableInfo.textContent = state.feeds.length
+            ? 'Tidak ada log yang cocok dengan filter / pencarian.'
+            : 'Tidak ada log untuk ditampilkan.';
+        } else {
+          const end = Math.min(start + CONFIG.perPage, rows.length);
+          els.tableInfo.textContent = `Menampilkan ${start + 1}–${end} dari ${rows.length} log` +
+            (state.filter !== 'all' ? ' (terfilter)' : '') +
+            (state.search.trim() ? ' (pencarian aktif)' : '');
+        }
+
+        renderPagination(totalPages);
+      }
+
+      /* ============================================================
+         RENDER: ALL
+      ============================================================ */
+      function renderAll() {
+        renderConnection();
+        renderMetrics();
+        renderChart();
+        renderTable();
+      }
+
+      /* ============================================================
+         FETCH / POLLING
+      ============================================================ */
+      async function fetchData() {
+        if (state.loading) return;
+        state.loading = true;
+
+        els.refreshIcon.classList.add('fa-spin');
+        els.refreshBtn.setAttribute('aria-busy', 'true');
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.fetchTimeoutMs);
+
+        try {
+          const url = `${CONFIG.endpoint}&_=${Date.now()}`;
+          const res = await fetch(url, {
+            cache: 'no-store',
+            signal: controller.signal,
+            headers: { Accept: 'application/json' }
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+          const json = await res.json();
+          if (!json || !Array.isArray(json.feeds)) throw new Error('Format respons ThingSpeak tidak valid');
+
+          handleSuccess(json);
+        } catch (err) {
+          const message = err && err.name === 'AbortError'
+            ? 'Waktu permintaan habis (timeout).'
+            : (err && err.message) ? err.message : 'Kesalahan jaringan tidak diketahui.';
+          handleError(message);
+        } finally {
+          clearTimeout(timeoutId);
+          state.loading = false;
+          els.refreshIcon.classList.remove('fa-spin');
+          els.refreshBtn.removeAttribute('aria-busy');
+        }
+      }
+
+      function handleSuccess(json) {
+        const wasOffline = state.online === false;
+        if (mqttLiveActive && (Date.now() - lastMqttMsgAt > CONFIG.pollMs)) {
+          mqttLiveActive = false;
+          lastLiveTemp = null;
+        }
+
+        state.feeds = parseFeeds(json.feeds);
+        state.online = true;
+        state.error = null;
+        state.hasFetched = true;
+        state.lastUpdate = new Date();
+
+        els.lastUpdated.textContent = `${timeWIB(state.lastUpdate)} WIB`;
+        els.lastUpdated.setAttribute('title', `Update terakhir: ${formatWIB(state.lastUpdate)} WIB`);
+
+        renderAll();
+
+        if (wasOffline) toast('Koneksi ThingSpeak pulih. Data terbaru berhasil dimuat.', 'success');
+      }
+
+      function handleError(message) {
+        const shouldNotify = state.online !== false;
+
+        state.online = false;
+        state.error = message;
+        state.hasFetched = true;
+
+        renderConnection();
+        renderTable();
+
+        if (shouldNotify) {
+          toast('Gagal memuat data ThingSpeak. ' + (state.feeds.length ? 'Menampilkan data terakhir.' : 'Belum ada data tersimpan.'), 'error');
+        }
+      }
+
+      /* ============================================================
+         EXPORTS
+      ============================================================ */
+      function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+
+      function csvEscape(value) {
+        const s = String(value == null ? '' : value);
+        if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      }
+
+      function buildExportRows() {
+        const rows = getRows();
+        const latestId = state.feeds.length ? state.feeds[state.feeds.length - 1].entryId : null;
+        const body = rows.map((r) => [
+          r.entryId,
+          r.timeWIB,
+          r.temp.toFixed(2),
+          r.code,
+          r.cls.label.toUpperCase(),
+          r.cls.note,
+          r.marker,
+          r.entryId === latestId ? 'Online' : 'ThingSpeak'
+        ]);
+        return { rows, body, latestId };
+      }
+
+      function exportCSV() {
+        const { rows, body } = buildExportRows();
+        if (!rows.length) {
+          toast('Tidak ada data untuk diekspor.', 'error');
+          return;
+        }
+
+        const lines = [EXPORT_HEADER, ...body].map((row) => row.map(csvEscape).join(','));
+        const csv = '\uFEFF' + lines.join('\r\n');
+        downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `temperature-log_${wibStamp()}.csv`);
+        toast(`${rows.length} log berhasil diekspor ke CSV.`, 'success');
+      }
+
+      function exportXLSX() {
+        const { rows, body } = buildExportRows();
+        if (!rows.length) {
+          toast('Tidak ada data untuk diekspor.', 'error');
+          return;
+        }
+        if (typeof XLSX === 'undefined') {
+          toast('Pustaka SheetJS gagal dimuat. Periksa koneksi internet Anda.', 'error');
+          return;
+        }
+
+        try {
+          const aoa = [EXPORT_HEADER, ...body.map((row) => [row[0], row[1], Number(row[2]), row[3], row[4], row[5], row[6], row[7]])];
+          const ws = XLSX.utils.aoa_to_sheet(aoa);
+          ws['!cols'] = [
+            { wch: 13 },  // No. Sampel
+            { wch: 22 },  // Waktu WIB
+            { wch: 11 },  // Suhu
+            { wch: 16 },  // Kode klasifikasi
+            { wch: 17 },  // Kategori
+            { wch: 32 },  // Catatan
+            { wch: 11 },  // Marker
+            { wch: 18 }   // Status transmisi
+          ];
+          ws['!autofilter'] = {
+            ref: XLSX.utils.encode_range({
+              s: { r: 0, c: 0 },
+              e: { r: aoa.length - 1, c: EXPORT_HEADER.length - 1 }
+            })
+          };
+
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Temperature Log');
+          XLSX.writeFile(wb, `temperature-log_${wibStamp()}.xlsx`);
+          toast(`${rows.length} log berhasil diekspor ke Excel.`, 'success');
+        } catch (err) {
+          toast('Gagal membuat file Excel: ' + (err.message || 'unknown error'), 'error');
+        }
+      }
+
+      function exportChartPNG() {
+        if (!state.chart || !state.chart.data.datasets[0].data.length) {
+          toast('Grafik masih kosong, belum ada data untuk diekspor.', 'error');
+          return;
+        }
+        try {
+          const url = state.chart.toBase64Image('image/png', 1);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `temperature-chart_${wibStamp()}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          toast('Grafik berhasil diekspor sebagai gambar PNG.', 'success');
+        } catch (err) {
+          toast('Gagal mengekspor grafik: ' + (err.message || 'unknown error'), 'error');
+        }
+      }
+
+      /* ============================================================
+         TOAST
+      ============================================================ */
+      function toast(message, type = 'info') {
+        const icons = {
+          success: 'fa-circle-check',
+          error: 'fa-circle-exclamation',
+          info: 'fa-circle-info'
+        };
+        const icon = icons[type] || icons.info;
+
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.innerHTML = `<i class="fa-solid ${icon} mt-0.5 text-sm" aria-hidden="true"></i><p class="text-xs font-medium leading-relaxed">${message}</p>`;
+        els.toastContainer.appendChild(el);
+
+        requestAnimationFrame(() => el.classList.add('show'));
+        setTimeout(() => {
+          el.classList.remove('show');
+          setTimeout(() => el.remove(), 320);
+        }, 4200);
+      }
+
+      /* ============================================================
+         THEME
+      ============================================================ */
+      function updateThemeIcon() {
+        const dark = document.documentElement.classList.contains('dark');
+        if (els.themeIcon) {
+          els.themeIcon.className = dark ? 'fa-solid fa-sun text-xs' : 'fa-solid fa-moon text-xs';
+        }
+        if (els.themeToggle) {
+          els.themeToggle.setAttribute('aria-label', dark ? 'Aktifkan tema terang' : 'Aktifkan tema gelap');
+          els.themeToggle.setAttribute('title', dark ? 'Switch to light mode' : 'Switch to dark mode');
+        }
+      }
+
+      /* ============================================================
+         EVENTS & INIT
+      ============================================================ */
+      function cacheElements() {
+        els.connPill = $('connPill');
+        els.connDot = $('connDot');
+        els.connText = $('connText');
+        els.livePill = $('livePill');
+        els.liveDot = $('liveDot');
+        els.liveText = $('liveText');
+        els.lastUpdated = $('lastUpdated');
+        els.refreshBtn = $('refreshBtn');
+        els.refreshIcon = $('refreshIcon');
+        els.themeToggle = $('themeToggle');
+        els.themeIcon = $('themeIcon');
+        els.errorBanner = $('errorBanner');
+        els.errorTitle = $('errorTitle');
+        els.errorDetail = $('errorDetail');
+        els.retryBtn = $('retryBtn');
+        els.metricTemp = $('metricTemp');
+        els.metricTrend = $('metricTrend');
+        els.metricStatus = $('metricStatus');
+        els.metricStatusNote = $('metricStatusNote');
+        els.metricTotal = $('metricTotal');
+        els.metricTotalSub = $('metricTotalSub');
+        els.metricAvg = $('metricAvg');
+        els.metricAvgSub = $('metricAvgSub');
+        els.tempChart = $('tempChart');
+        els.chartEmpty = $('chartEmpty');
+        els.exportChartBtn = $('exportChartBtn');
+        els.searchInput = $('searchInput');
+        els.filterSelect = $('filterSelect');
+        els.tableBody = $('tableBody');
+        els.tableInfo = $('tableInfo');
+        els.pagination = $('pagination');
+        els.exportCsvBtn = $('exportCsvBtn');
+        els.exportXlsxBtn = $('exportXlsxBtn');
+        els.toastContainer = $('toastContainer');
+      }
+
+      function bindEvents() {
+        els.refreshBtn.addEventListener('click', () => fetchData());
+        els.retryBtn.addEventListener('click', () => fetchData());
+
+        els.themeToggle.addEventListener('click', () => {
+          const dark = document.documentElement.classList.toggle('dark');
+          try { localStorage.setItem('ptmk-theme', dark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+          updateThemeIcon();
+          applyChartTheme();
+        });
+
+        els.exportChartBtn.addEventListener('click', exportChartPNG);
+        els.exportCsvBtn.addEventListener('click', exportCSV);
+        els.exportXlsxBtn.addEventListener('click', exportXLSX);
+
+        els.searchInput.addEventListener('input', (e) => {
+          state.search = e.target.value || '';
+          state.page = 1;
+          renderTable();
+        });
+
+        els.filterSelect.addEventListener('change', (e) => {
+          state.filter = e.target.value || 'all';
+          state.page = 1;
+          renderTable();
+        });
+
+        els.pagination.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-page]');
+          if (!btn || btn.disabled) return;
+          const page = Number(btn.dataset.page);
+          if (!Number.isFinite(page) || page < 1 || page === state.page) return;
+          state.page = page;
+          renderTable();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) fetchData();
+        });
+      }
+
+      function init() {
+        cacheElements();
+        bindEvents();
+        updateThemeIcon();
+
+        const yearEl = $('year');
+        if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
+        createChart();
+        renderAll();
+        fetchData();
+
+        setInterval(() => {
+          if (!document.hidden) fetchData();
+        }, CONFIG.pollMs);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    // === INTEGRASI REAL-TIME MQTT (GRAFIK + ANGKA UTAMA) ===
+    let mqttLiveActive = false;
+    let lastMqttMsgAt = 0;
+    let lastLiveTemp = null;
+
+    const brokerUrl = window.location.protocol === 'https:'
+      ? 'wss://broker.emqx.io:8084/mqtt'
+      : 'ws://broker.emqx.io:8083/mqtt';
+
+    const topicLive = 'ra_kel5/tempkit/live';
+    const mqttClient = mqtt.connect(brokerUrl);
+
+    mqttClient.on('connect', () => {
+      console.log('Terhubung ke MQTT Live Stream!');
+      mqttClient.subscribe(topicLive);
+    });
+
+    mqttClient.on('message', (topic, message) => {
+      if (topic !== topicLive) return;
+
+      let data;
+      try {
+        data = JSON.parse(message.toString());
+      } catch (e) {
+        return;
+      }
+
+      const elSuhu = $('metricTemp');
+
+      if (data && data.suhu !== null && !Number.isNaN(Number(data.suhu))) {
+        const isFirstLivePacket = !mqttLiveActive;
+        mqttLiveActive = true;
+        lastMqttMsgAt = Date.now();
+
+        const suhuVal = Number(Number(data.suhu).toFixed(2));
+        const code = resolveCode(null, suhuVal);
+        const cls = CLASSES[code];
+
+        // 1. Update angka besar metricTemp, status klasifikasi, dan indikator tren
+        if (elSuhu) elSuhu.textContent = suhuVal.toFixed(2);
+        if (els.metricStatus) els.metricStatus.innerHTML = badgeHTML(cls, 'lg');
+        if (els.metricStatusNote) els.metricStatusNote.textContent = `Rentang ${cls.range}`;
+
+        if (els.metricTrend) {
+          if (lastLiveTemp === null) {
+            els.metricTrend.className = 'trend-pill stable mt-3';
+            els.metricTrend.innerHTML = '<i class="fa-solid fa-bolt" aria-hidden="true"></i><span>Live Stream Aktif</span>';
+          } else {
+            const diff = suhuVal - lastLiveTemp;
+            if (diff > 0.05) {
+              els.metricTrend.className = 'trend-pill up mt-3';
+              els.metricTrend.innerHTML = `<i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i><span>+${Math.abs(diff).toFixed(2)} °C</span><span class="opacity-70">naik</span>`;
+            } else if (diff < -0.05) {
+              els.metricTrend.className = 'trend-pill down mt-3';
+              els.metricTrend.innerHTML = `<i class="fa-solid fa-arrow-trend-down" aria-hidden="true"></i><span>${Math.abs(diff).toFixed(2)} °C</span><span class="opacity-70">turun</span>`;
+            } else {
+              els.metricTrend.className = 'trend-pill stable mt-3';
+              els.metricTrend.innerHTML = '<i class="fa-solid fa-arrow-right" aria-hidden="true"></i><span>Stabil</span><span class="opacity-70">±0.05 °C</span>';
+            }
+          }
+        }
+        lastLiveTemp = suhuVal;
+
+        // 2. Dorong titik baru langsung ke grafik state.chart tanpa tertimpa histori lama
+        if (state.chart) {
+          const now = new Date();
+          const waktuLabel = timeWIB(now);
+          const fullLabel = formatWIB(now);
+
+          const labels = state.chart.data.labels;
+          const dataset = state.chart.data.datasets[0];
+
+          // Bersihkan titik histori lama saat paket live pertama masuk agar grafik tidak lompat
+          if (isFirstLivePacket) {
+            labels.length = 0;
+            dataset.data.length = 0;
+            state.chart.$fullLabels = [];
+            state.chart.$rows = [];
+          }
+
+          if (!Array.isArray(state.chart.$fullLabels)) state.chart.$fullLabels = [];
+          if (!Array.isArray(state.chart.$rows)) state.chart.$rows = [];
+
+          labels.push(waktuLabel);
+          dataset.data.push(suhuVal);
+          state.chart.$fullLabels.push(fullLabel);
+          state.chart.$rows.push({ temp: suhuVal, cls });
+
+          // Pertahankan maksimal 50 titik terakhir agar grafik tetap rapi
+          while (labels.length > 50) {
+            labels.shift();
+            dataset.data.shift();
+            state.chart.$fullLabels.shift();
+            state.chart.$rows.shift();
+          }
+
+          // Sesuaikan warna garis & titik mengikuti klasifikasi suhu aktual
+          dataset.borderColor = cls.color;
+          dataset.pointBackgroundColor = cls.color;
+          dataset.pointBorderColor = getThemeColors().bg;
+
+          // Hitung ulang skala sumbu Y secara dinamis agar kurva selalu proporsional
+          const temps = dataset.data;
+          const lo = Math.min(...temps, 18);
+          const hi = Math.max(...temps, 36);
+          const pad = Math.max(0.6, (hi - lo) * 0.06);
+          state.chart.options.scales.y.min = Math.floor((lo - pad) * 10) / 10;
+          state.chart.options.scales.y.max = Math.ceil((hi + pad) * 10) / 10;
+
+          if (els.chartEmpty) els.chartEmpty.classList.add('hidden');
+          state.chart.update('none');
+        }
+      } else if (elSuhu) {
+        elSuhu.textContent = 'GALAT';
+      }
+    });  
+
+    })();
+  </script>
+</body>
+</html>
